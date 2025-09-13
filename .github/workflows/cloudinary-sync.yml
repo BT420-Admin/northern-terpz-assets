@@ -1,0 +1,53 @@
+name: Sync images to Cloudinary
+
+on:
+  push:
+    paths:
+      - 'assets/images/**'
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install dependencies
+        run: npm install cloudinary
+
+      - name: Upload changed images
+        env:
+          UPLOAD_PRESET: unsigned_assets
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+        run: |
+          node <<'EOF'
+          const { v2: cloudinary } = require('cloudinary');
+          const { execSync } = require('child_process');
+
+          const files = execSync(
+            `git diff --name-only ${{ github.event.before }} ${{ github.sha }}`
+          )
+            .toString()
+            .split('\n')
+            .filter(f => f.startsWith('assets/images/'));
+
+          for (const file of files.filter(Boolean)) {
+            cloudinary.uploader.upload(
+              file,
+              {
+                folder: 'northern-terpz',
+                public_id: file.replace('assets/images/','').split('.')[0],
+                upload_preset: process.env.UPLOAD_PRESET
+              },
+              (err, res) =>
+                err
+                  ? console.error(err)
+                  : console.log('Uploaded:', res.secure_url)
+            );
+          }
+          EOF
+
